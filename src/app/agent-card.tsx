@@ -1,44 +1,45 @@
-interface Agent {
+export type AgentStatus = 'online' | 'offline' | 'idle';
+
+export interface Agent {
   name: string;
   borderColor: string;
-  online: boolean;
+  status: AgentStatus;
   model: string;
-  uptime: string;
+  role: string;
+  service: string;
 }
 
-interface AgentCardProps {
-  agent: Agent;
-}
+const STATUS_COLORS: Record<AgentStatus, string> = {
+  online:  'bg-green-500',
+  offline: 'bg-gray-500',
+  idle:    'bg-yellow-500',
+};
 
-export function AgentCard({ agent }: AgentCardProps) {
+const AGENTS: Agent[] = [
+  { name: 'Wisp',   borderColor: '#a855f7', status: 'online',  model: 'Claude',  role: 'Archivist & Memory Keeper', service: 'wisp-bot.service' },
+  { name: 'Sage',   borderColor: '#22c55e', status: 'online',  model: 'Claude',  role: 'Dev Lead & Architect',      service: 'sage-bot.service' },
+  { name: 'River',  borderColor: '#3b82f6', status: 'online',  model: 'Claude',  role: 'Librarian & Cataloger',     service: 'river-bot.service' },
+  { name: 'Cerina', borderColor: '#ec4899', status: 'online',  model: '—',       role: 'Mommy',                      service: '@cerinawithasea' },
+];
+
+function AgentCard({ agent }: { agent: Agent }) {
   return (
     <div
-      className="bg-gray-900 rounded-xl p-5 border border-gray-800"
-      style={{ borderLeft: `4px solid ${agent.borderColor}` }}
+      className="rounded-xl border bg-gray-900/50 p-4 transition-colors hover:bg-gray-900"
+      style={{ borderColor: agent.borderColor + '40' }}
     >
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-base font-semibold text-white">{agent.name}</h3>
-        <span className="flex items-center gap-1.5 text-xs font-medium">
-          <span
-            className={`w-2 h-2 rounded-full ${agent.online ? 'bg-green-400 animate-pulse' : 'bg-gray-500'}`}
-          />
-          <span className={agent.online ? 'text-green-400' : 'text-gray-500'}>
-            {agent.online ? 'Online' : 'Offline'}
-          </span>
-        </span>
+      <div className="flex items-center gap-3 mb-2">
+        <span className={`w-2.5 h-2.5 rounded-full ${STATUS_COLORS[agent.status]}`} />
+        <span className="text-sm font-semibold text-white">{agent.name}</span>
       </div>
-      <div className="space-y-1.5 text-sm">
-        <div className="flex justify-between">
-          <span className="text-gray-500">Model</span>
-          <span className="text-gray-200">{agent.model}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-gray-500">Uptime</span>
-          <span className="text-gray-200">{agent.uptime}</span>
-        </div>
+      <div className="text-xs text-gray-400 mb-1">{agent.role}</div>
+      <div className="flex items-center gap-2 text-[10px] text-gray-500 font-mono">
+        <span>{agent.model}</span>
+        <span>·</span>
+        <span>{agent.service}</span>
       </div>
     </div>
   );
 }
 
-export type { Agent };
+export { AgentCard, AGENTS };

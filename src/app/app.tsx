@@ -5,10 +5,10 @@ import { useState } from 'react';
 import { TabBar } from './tab-bar';
 import type { Tab } from './tab-bar';
 import { HomeTab } from './home-tab';
-import { PlaceholderPanel } from './placeholder-panel';
 import { TasksTab } from './tasks-tab';
 import { LibraryTab } from './library-tab';
 import { SessionsTab } from './sessions-tab';
+import { ConnectionsTab } from './connections-tab';
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('Home');
@@ -30,7 +30,7 @@ function App() {
         {activeTab === 'Tasks'       && <TasksTab />}
         {activeTab === 'Library'     && <LibraryTab />}
         {activeTab === 'Sessions'    && <SessionsTab />}
-        {activeTab === 'Connections' && <PlaceholderPanel name="Connections" />}
+        {activeTab === 'Connections' && <ConnectionsTab />}
       </main>
     </div>
   );
