@@ -13,12 +13,14 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   done: 'Done',
   'in-progress': 'In Progress',
   blocked: 'Blocked',
+  pending: 'Pending',
 };
 
 const STATUS_DOT: Record<TaskStatus, string> = {
   done:          'bg-green-400',
   'in-progress': 'bg-yellow-400',
   blocked:       'bg-red-400',
+  pending:       'bg-gray-400',
 };
 
 interface TaskDetailDialogProps {

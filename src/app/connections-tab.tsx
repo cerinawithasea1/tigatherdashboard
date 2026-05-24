@@ -1,5 +1,6 @@
-import { SERVICES, SERVICE_COLORS, STATUS_COLORS, TYPE_ICONS } from './connections-data';
+import { useApi } from './use-api';
 import type { Service, ServiceStatus } from './connections-data';
+import { SERVICE_COLORS, STATUS_COLORS, TYPE_ICONS } from './connections-data';
 
 function StatusDot({ status }: { status: ServiceStatus }) {
   return (
@@ -36,13 +37,19 @@ function SectionHeader({ label, count }: { label: string; count: number }) {
   );
 }
 
+const FALLBACK_SERVICES: Service[] = [
+  { name: 'Loading...', type: 'systemd', status: 'unknown', detail: 'Fetching from API...' },
+];
+
 export function ConnectionsTab() {
-  const docker = SERVICES.filter((s) => s.type === 'docker');
-  const systemd = SERVICES.filter((s) => s.type === 'systemd');
-  const tunnels = SERVICES.filter((s) => s.type === 'tunnel');
-  const ports = SERVICES.filter((s) => s.type === 'port');
-  const running = SERVICES.filter((s) => s.status === 'running').length;
-  const total = SERVICES.length;
+  const { data: services, loading, lastUpdated } = useApi<Service[]>('/api/connections', FALLBACK_SERVICES, 15000);
+
+  const docker = services.filter((s) => s.type === 'docker');
+  const systemd = services.filter((s) => s.type === 'systemd');
+  const tunnels = services.filter((s) => s.type === 'tunnel');
+  const ports = services.filter((s) => s.type === 'port');
+  const running = services.filter((s) => s.status === 'running').length;
+  const total = services.length;
 
   return (
     <div className="p-6">
@@ -52,14 +59,19 @@ export function ConnectionsTab() {
           <span className="text-2xl font-bold text-white">{running}</span>
           <span className="text-sm text-gray-500">/ {total} services running</span>
         </div>
-        {running === total && (
+        {running === total && total > 1 && (
           <span className="text-[10px] px-2 py-1 rounded-full bg-green-900/30 text-green-400 border border-green-800/30 font-mono">
             ALL CLEAR
           </span>
         )}
-        {running < total && (
+        {running < total && total > 1 && (
           <span className="text-[10px] px-2 py-1 rounded-full bg-yellow-900/30 text-yellow-400 border border-yellow-800/30 font-mono">
             {total - running} DOWN
+          </span>
+        )}
+        {loading && (
+          <span className="text-[10px] px-2 py-1 rounded-full bg-blue-900/30 text-blue-400 border border-blue-800/30 font-mono">
+            LOADING...
           </span>
         )}
       </div>
@@ -94,7 +106,10 @@ export function ConnectionsTab() {
 
       {/* Footer note */}
       <p className="text-[10px] text-gray-600 mt-4 font-mono">
-        Last scanned: {new Date().toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} — data from docker ps, systemctl, ss -tlnp
+        {lastUpdated
+          ? `Last scanned: ${lastUpdated.toLocaleString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })} — live from sanctuary API`
+          : 'Connecting to Sanctuary API...'
+        }
       </p>
     </div>
   );
