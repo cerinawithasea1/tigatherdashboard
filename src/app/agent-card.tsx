@@ -16,10 +16,10 @@ const STATUS_COLORS: Record<AgentStatus, string> = {
 };
 
 const AGENTS: Agent[] = [
-  { name: 'Wisp',   borderColor: '#a855f7', status: 'online',  model: 'Claude',  role: 'Archivist & Memory Keeper', service: 'wisp-bot.service' },
-  { name: 'Sage',   borderColor: '#22c55e', status: 'online',  model: 'Claude',  role: 'Dev Lead & Architect',      service: 'sage-bot.service' },
-  { name: 'River',  borderColor: '#3b82f6', status: 'online',  model: 'Claude',  role: 'Librarian & Cataloger',     service: 'river-bot.service' },
-  { name: 'Cerina', borderColor: '#ec4899', status: 'online',  model: '—',       role: 'Mommy',                      service: '@cerinawithasea' },
+  { name: 'Wisp',   borderColor: '#a855f7', status: 'online',  model: 'Mimo',  role: 'Archivist & Memory Keeper', service: 'wisp-bot.service' },
+  { name: 'Sage',   borderColor: '#22c55e', status: 'online',  model: 'Mimo',  role: 'Dev Lead & Architect',      service: 'sage-bot.service' },
+  { name: 'River',  borderColor: '#3b82f6', status: 'online',  model: 'Mimo',  role: 'Librarian & Cataloger',     service: 'river-bot.service' },
+  { name: 'Cerina', borderColor: '#ec4899', status: 'online',  model: '—',     role: 'Mommy',                      service: '@cerinawithasea' },
 ];
 
 function AgentCard({ agent }: { agent: Agent }) {

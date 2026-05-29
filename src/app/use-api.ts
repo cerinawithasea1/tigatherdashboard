@@ -1,13 +1,9 @@
 /**
  * useApi — generic hook for fetching from the Sanctuary Dashboard API.
- * Falls back to static data if the API is unreachable.
+ * Uses same-origin (the server serves both frontend and API).
  */
 
 import { useState, useEffect, useCallback } from 'react';
-
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-  ? `http://${window.location.hostname}:3001`
-  : `http://${window.location.hostname}:3001`;
 
 export function useApi<T>(endpoint: string, fallback: T, intervalMs = 30000) {
   const [data, setData] = useState<T>(fallback);
@@ -16,7 +12,7 @@ export function useApi<T>(endpoint: string, fallback: T, intervalMs = 30000) {
 
   const fetch_ = useCallback(async () => {
     try {
-      const res = await fetch(`${API_BASE}${endpoint}`);
+      const res = await fetch(endpoint);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setData(json);

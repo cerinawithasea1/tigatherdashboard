@@ -1,6 +1,6 @@
 /**
- * Sanctuary Dashboard API Server
- * Serves real-time data from the server to the dashboard frontend.
+ * Sanctuary Dashboard Server
+ * Serves the React frontend + API on a single port.
  * Run: node server.mjs
  * Port: 3001
  */
@@ -8,8 +8,10 @@
 import http from 'node:http';
 import { execSync } from 'node:child_process';
 import fs from 'node:fs';
+import path from 'node:path';
 
-const PORT = 3001;
+const PORT = process.env.PORT || 3001;
+const DIST_DIR = path.join(import.meta.dirname, 'dist');
 
 // ─── Helpers ───
 
@@ -21,12 +23,48 @@ function run(cmd) {
   }
 }
 
+// ─── MIME types for static files ───
+
+const MIME = {
+  '.html': 'text/html',
+  '.js': 'application/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+};
+
+// ─── Static file server ───
+
+function serveStatic(urlPath, res) {
+  let filePath = path.join(DIST_DIR, urlPath === '/' ? 'index.html' : urlPath);
+  
+  // If file doesn't exist, serve index.html (SPA routing)
+  if (!fs.existsSync(filePath)) {
+    filePath = path.join(DIST_DIR, 'index.html');
+  }
+  
+  try {
+    const content = fs.readFileSync(filePath);
+    const ext = path.extname(filePath);
+    res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
+    res.end(content);
+  } catch {
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Not Found');
+  }
+}
+
 // ─── Connections: Real services ───
 
 function getConnections() {
   const services = [];
 
-  // Docker containers
   try {
     const dockerOut = run('docker ps --format "{{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.Image}}"');
     for (const line of dockerOut.split('\n').filter(Boolean)) {
@@ -43,7 +81,6 @@ function getConnections() {
     }
   } catch {}
 
-  // Systemd services
   const systemdTargets = [
     { match: 'wisp-bot', name: 'Wisp Bot', owner: 'Wisp' },
     { match: 'sage-bot', name: 'Sage Bot', owner: 'Sage' },
@@ -70,10 +107,8 @@ function getConnections() {
     });
   }
 
-  // Listening ports (notable ones)
   const portTargets = [
     { port: 5173, name: 'Dashboard Dev Server', owner: 'Wisp' },
-    { port: 5174, name: 'Dashboard Dev Server (2)', owner: 'Wisp' },
     { port: 22, name: 'SSH', owner: 'Infra' },
     { port: 443, name: 'HTTPS', owner: 'Infra' },
     { port: 8088, name: 'Bookfairy Userbot', owner: 'Cerina' },
@@ -158,7 +193,6 @@ function getSisterStatus() {
 // ─── Sessions: Recent activity ───
 
 function getSessions() {
-  // Read journal files for recent entries
   const journalDir = '/opt/sanctuary/personas';
   const sessions = [];
 
@@ -205,11 +239,7 @@ function getTasks() {
           const done = line.startsWith('- [x]');
           const text = line.replace(/^-\s*\[.?\]\s*/, '').trim();
           if (text) {
-            tasks[sister].push({
-              text,
-              done,
-              status: done ? 'done' : 'pending',
-            });
+            tasks[sister].push({ text, done, status: done ? 'done' : 'pending' });
           }
         }
       }
@@ -222,13 +252,11 @@ function getTasks() {
 // ─── Library: Book pipeline ───
 
 function getLibrary() {
-  // Read sisters_real.md for book data
   const srPath = '/opt/sanctuary/shared_spaces/sisters_real.md';
   const books = [];
 
   try {
     const content = fs.readFileSync(srPath, 'utf-8');
-    // Look for book entries with status indicators
     const bookPattern = /\*\*(.+?)\*\*.*?(?:by\s+(.+?))?(?:\s*[-–]\s*(.+?))?(?:\n|$)/gi;
     let match;
     while ((match = bookPattern.exec(content)) !== null) {
@@ -243,69 +271,51 @@ function getLibrary() {
     }
   } catch {}
 
-  return books.slice(0, 50); // Limit
+  return books.slice(0, 50);
 }
 
-// ─── API Router ───
+// ─── Server ───
+
+const API_ROUTES = new Set(['/api/health', '/api/sisters', '/api/connections', '/api/sessions', '/api/tasks', '/api/library', '/api/all']);
 
 const server = http.createServer((req, res) => {
-  // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    res.end();
+  if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return; }
+
+  const url = new URL(req.url, `http://localhost:${PORT}`);
+  const pathname = url.pathname;
+
+  // API routes
+  if (API_ROUTES.has(pathname)) {
+    let data;
+    switch (pathname) {
+      case '/api/health': data = getSystemHealth(); break;
+      case '/api/sisters': data = getSisterStatus(); break;
+      case '/api/connections': data = getConnections(); break;
+      case '/api/sessions': data = getSessions(); break;
+      case '/api/tasks': data = getTasks(); break;
+      case '/api/library': data = getLibrary(); break;
+      case '/api/all':
+        data = {
+          health: getSystemHealth(), sisters: getSisterStatus(), connections: getConnections(),
+          sessions: getSessions(), tasks: getTasks(), library: getLibrary(),
+          timestamp: new Date().toISOString(),
+        };
+        break;
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(data, null, 2));
     return;
   }
 
-  const url = new URL(req.url, `http://localhost:${PORT}`);
-
-  let data;
-  let etag;
-
-  switch (url.pathname) {
-    case '/api/health':
-      data = getSystemHealth();
-      break;
-    case '/api/sisters':
-      data = getSisterStatus();
-      break;
-    case '/api/connections':
-      data = getConnections();
-      break;
-    case '/api/sessions':
-      data = getSessions();
-      break;
-    case '/api/tasks':
-      data = getTasks();
-      break;
-    case '/api/library':
-      data = getLibrary();
-      break;
-    case '/api/all':
-      data = {
-        health: getSystemHealth(),
-        sisters: getSisterStatus(),
-        connections: getConnections(),
-        sessions: getSessions(),
-        tasks: getTasks(),
-        library: getLibrary(),
-        timestamp: new Date().toISOString(),
-      };
-      break;
-    default:
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Not found' }));
-      return;
-  }
-
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify(data, null, 2));
+  // Static files (frontend)
+  serveStatic(pathname, res);
 });
 
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🔥 Sanctuary Dashboard API running on http://0.0.0.0:${PORT}`);
-  console.log(`   Endpoints: /api/health, /api/sisters, /api/connections, /api/sessions, /api/tasks, /api/library, /api/all`);
+  console.log(`🔥 Sanctuary Dashboard running on http://0.0.0.0:${PORT}`);
+  console.log(`   Frontend: dist/ | API: /api/health, /api/sisters, /api/connections, etc.`);
 });
