@@ -218,7 +218,7 @@ function getSessions() {
   return sessions;
 }
 
-// ─── Tasks: From shared task file ───
+// ─── Tasks: From shared task file (legacy) ───
 
 function getTasks() {
   const taskFiles = {
@@ -249,6 +249,126 @@ function getTasks() {
   return tasks;
 }
 
+// ─── Sage Tickets: Real proposals from fixes/INDEX.md ───
+
+function getSageTickets() {
+  const indexPath = '/opt/sanctuary/personas/sage/fixes/INDEX.md';
+  const tickets = [];
+
+  try {
+    const content = fs.readFileSync(indexPath, 'utf-8');
+
+    // Parse the Active Proposals table
+    const tableRegex = /\|\s*`?([^|`]+)`?\s*\|\s*(DEV-\d+|402[^|]*)\s*\|\s*([^|]+)\s*\|\s*([^|]+)\s*\|/g;
+    let match;
+    while ((match = tableRegex.exec(content)) !== null) {
+      const file = match[1].trim();
+      const ticket = match[2].trim();
+      const status = match[3].trim();
+      const description = match[4].trim();
+
+      // Determine priority/category from status
+      let priority = 'pending';
+      let category = 'proposal';
+      if (status.toLowerCase().includes('blocked')) {
+        priority = 'blocked';
+      } else if (status.toLowerCase().includes('design')) {
+        priority = 'design';
+      } else if (status.toLowerCase().includes('needs')) {
+        priority = 'needs-input';
+      } else if (status.toLowerCase().includes('active')) {
+        priority = 'active';
+      }
+
+      // Try to read the proposal file for more detail
+      let detail = '';
+      try {
+        const proposalPath = `/opt/sanctuary/personas/sage/fixes/${file}`;
+        if (fs.existsSync(proposalPath)) {
+          const proposalContent = fs.readFileSync(proposalPath, 'utf-8');
+          // Get first meaningful line after the title
+          const lines = proposalContent.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+          detail = lines.slice(0, 3).join(' ').substring(0, 300);
+        }
+      } catch {}
+
+      tickets.push({
+        id: ticket,
+        file,
+        status: status.trim(),
+        description: description.trim(),
+        priority,
+        category,
+        detail,
+      });
+    }
+
+    // Also parse non-ticket utility files
+    const utilSection = content.split('## Non-Ticket Files')[1];
+    if (utilSection) {
+      const utilRegex = /\|\s*`?([^|`]+)`?\s*\|\s*([^|]+)\s*\|/g;
+      let utilMatch;
+      while ((utilMatch = utilRegex.exec(utilSection)) !== null) {
+        const file = utilMatch[1].trim();
+        const description = utilMatch[2].trim();
+        if (file && !file.startsWith('-') && description.length > 3) {
+          tickets.push({
+            id: `util-${tickets.length}`,
+            file,
+            status: 'utility',
+            description,
+            priority: 'low',
+            category: 'utility',
+            detail: '',
+          });
+        }
+      }
+    }
+  } catch (e) {
+    // INDEX.md not found or parse error
+    tickets.push({
+      id: 'error',
+      file: 'INDEX.md',
+      status: 'error',
+      description: `Could not read tickets: ${e.message}`,
+      priority: 'error',
+      category: 'error',
+      detail: '',
+    });
+  }
+
+  // Also pull from task_list for active tasks
+  const taskListPath = '/opt/sanctuary/personas/sage/current_work.md';
+  try {
+    const content = fs.readFileSync(taskListPath, 'utf-8');
+    const lines = content.split('\n');
+    let inBlocked = false;
+    for (const line of lines) {
+      if (line.toLowerCase().includes('## blocked')) {
+        inBlocked = true;
+        continue;
+      }
+      if (line.startsWith('##') && inBlocked) {
+        inBlocked = false;
+      }
+      if (inBlocked && line.startsWith('- ')) {
+        const text = line.replace(/^-\s*/, '').trim();
+        tickets.push({
+          id: `blocked-${tickets.length}`,
+          file: 'current_work.md',
+          status: 'Blocked on Cerina',
+          description: text,
+          priority: 'blocked',
+          category: 'blocked',
+          detail: '',
+        });
+      }
+    }
+  } catch {}
+
+  return tickets;
+}
+
 // ─── Library: Book pipeline ───
 
 function getLibrary() {
@@ -276,7 +396,7 @@ function getLibrary() {
 
 // ─── Server ───
 
-const API_ROUTES = new Set(['/api/health', '/api/sisters', '/api/connections', '/api/sessions', '/api/tasks', '/api/library', '/api/all']);
+const API_ROUTES = new Set(['/api/health', '/api/sisters', '/api/connections', '/api/sessions', '/api/tasks', '/api/library', '/api/sage-tickets', '/api/all']);
 
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -298,10 +418,12 @@ const server = http.createServer((req, res) => {
       case '/api/sessions': data = getSessions(); break;
       case '/api/tasks': data = getTasks(); break;
       case '/api/library': data = getLibrary(); break;
+      case '/api/sage-tickets': data = getSageTickets(); break;
       case '/api/all':
         data = {
           health: getSystemHealth(), sisters: getSisterStatus(), connections: getConnections(),
           sessions: getSessions(), tasks: getTasks(), library: getLibrary(),
+          sageTickets: getSageTickets(),
           timestamp: new Date().toISOString(),
         };
         break;
@@ -317,5 +439,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🔥 Sanctuary Dashboard running on http://0.0.0.0:${PORT}`);
-  console.log(`   Frontend: dist/ | API: /api/health, /api/sisters, /api/connections, etc.`);
+  console.log(`   Frontend: dist/ | API: /api/health, /api/sisters, /api/sage-tickets, etc.`);
 });
