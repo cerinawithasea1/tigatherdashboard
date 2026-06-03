@@ -1,55 +1,102 @@
 'use client';
 
-import { INITIAL_BOOKS, STAGES, STAGE_META } from './library-data';
-import { BookCard } from './book-card';
-import { daysSince } from './library-data';
+import { useApi } from './use-api';
+
+interface Book {
+  title: string;
+  author: string;
+  status: string;
+}
+
+const STATUS_STYLES: Record<string, { bg: string; text: string; border: string; label: string }> = {
+  'found':     { bg: 'bg-sky-500/10',    text: 'text-sky-400',    border: 'border-sky-500/20',    label: '📥 Found' },
+  'downloading': { bg: 'bg-yellow-500/10', text: 'text-yellow-300', border: 'border-yellow-500/20', label: '⬇️ Downloading' },
+  'done':      { bg: 'bg-green-500/10',  text: 'text-green-400',  border: 'border-green-500/20',  label: '✅ Done' },
+  'shared':    { bg: 'bg-purple-500/10', text: 'text-purple-400', border: 'border-purple-500/20', label: '🔗 Shared' },
+  'unknown':   { bg: 'bg-gray-500/10',   text: 'text-gray-400',   border: 'border-gray-500/20',   label: '❓ Unknown' },
+};
+
+function getStatusStyle(status: string) {
+  const key = status.toLowerCase();
+  return STATUS_STYLES[key] || STATUS_STYLES['unknown'];
+}
 
 export function LibraryTab() {
-  const books = INITIAL_BOOKS;
+  const { data, loading, lastUpdated } = useApi<Book[]>('/api/library', []);
 
-  const stuckCount = books.filter((b) => daysSince(b.stagedAt) >= 7).length;
+  // Group books by status
+  const grouped = data.reduce((acc, book) => {
+    const status = book.status?.toLowerCase() || 'unknown';
+    if (!acc[status]) acc[status] = [];
+    acc[status].push(book);
+    return acc;
+  }, {} as Record<string, Book[]>);
+
+  const statuses = Object.keys(grouped).sort();
+  const total = data.length;
 
   return (
     <div className="p-6">
-      {/* Banner if any stuck books */}
-      {stuckCount > 0 && (
-        <div className="mb-5 flex items-center gap-3 bg-orange-500/10 border border-orange-500/30 rounded-xl px-4 py-3 text-sm text-orange-300">
-          <span className="text-base">🕰</span>
-          <span>
-            <span className="font-semibold">{stuckCount} book{stuckCount > 1 ? 's' : ''}</span>
-            {' '}stuck in the same stage for 7+ days — review needed.
+      {/* Stats bar */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+        <div className="flex gap-3 text-xs">
+          <span className="bg-gray-800 rounded-full px-3 py-1 text-gray-400">
+            <span className="text-white font-semibold">{total}</span> books
           </span>
+          {statuses.map((status) => {
+            const style = getStatusStyle(status);
+            return (
+              <span key={status} className={`${style.bg} border ${style.border} rounded-full px-3 py-1 ${style.text}`}>
+                <span className="font-semibold">{grouped[status].length}</span> {style.label}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Loading */}
+      {loading && (
+        <div className="text-center text-gray-600 py-12 text-sm">Loading library...</div>
+      )}
+
+      {/* Books grid */}
+      {!loading && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          {data.map((book, i) => {
+            const style = getStatusStyle(book.status);
+            return (
+              <div
+                key={`${book.title}-${i}`}
+                className={`rounded-xl border ${style.border} ${style.bg} p-4 hover:scale-[1.01] transition-transform`}
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <h3 className="text-sm font-semibold text-white leading-tight">{book.title}</h3>
+                  <span className={`text-xs whitespace-nowrap ${style.text}`}>{style.label}</span>
+                </div>
+                {book.author && (
+                  <p className="text-xs text-gray-400 mb-1">{book.author}</p>
+                )}
+                <p className="text-xs text-gray-600 font-mono">Status: {book.status}</p>
+              </div>
+            );
+          })}
         </div>
       )}
 
-      {/* Columns */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
-        {STAGES.map((stage) => {
-          const col = books.filter((b) => b.stage === stage);
-          const meta = STAGE_META[stage];
-          return (
-            <div key={stage} className="flex flex-col gap-3">
-              {/* Column header */}
-              <div className={`flex items-center gap-2 border-b pb-2 ${meta.headerBorder}`}>
-                <span className="text-base leading-none">{meta.icon}</span>
-                <h2 className={`text-sm font-semibold uppercase tracking-widest ${meta.color}`}>
-                  {meta.label}
-                </h2>
-                <span className="ml-auto text-xs text-gray-600 bg-gray-800 rounded-full px-2 py-0.5">
-                  {col.length}
-                </span>
-              </div>
+      {/* Empty state */}
+      {!loading && data.length === 0 && (
+        <div className="text-center text-gray-600 py-12">
+          <p className="text-lg mb-2">📚</p>
+          <p className="text-sm">No books in the library yet.</p>
+        </div>
+      )}
 
-              {/* Cards */}
-              {col.length === 0 ? (
-                <p className="text-xs text-gray-600 text-center py-8">Empty</p>
-              ) : (
-                col.map((book) => <BookCard key={book.id} book={book} />)
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {/* Last updated */}
+      {lastUpdated && (
+        <p className="text-xs text-gray-600 mt-3 text-right">
+          Last updated: {lastUpdated.toLocaleTimeString()}
+        </p>
+      )}
     </div>
   );
 }
